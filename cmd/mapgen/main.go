@@ -5,7 +5,10 @@ import (
 	"log"
 	"os"
 
+	"github.com/nduyhai/mapgen/internal/generator"
+	"github.com/nduyhai/mapgen/internal/model"
 	"github.com/nduyhai/mapgen/internal/preprocessor"
+	"github.com/nduyhai/mapgen/internal/processor"
 	"github.com/nduyhai/mapgen/internal/scanner"
 )
 
@@ -72,6 +75,107 @@ func main() {
 			fmt.Printf("  - Type: %s\n", directive.Type)
 			fmt.Printf("  - Metadata: %v\n", directive.Metadata)
 			fmt.Printf("  - Node Type: %T\n", directive.Node)
+		}
+
+		// Create a processor registry
+		registry := processor.NewRegistry()
+
+		// Group directives by type
+		mapperDirectives := []model.Directive{}
+		mappingDirectives := []model.Directive{}
+		validatorDirectives := []model.Directive{}
+
+		for _, directive := range directives {
+			switch directive.Type {
+			case "mapper":
+				mapperDirectives = append(mapperDirectives, directive)
+			case "mapping":
+				mappingDirectives = append(mappingDirectives, directive)
+			case "validator":
+				validatorDirectives = append(validatorDirectives, directive)
+			}
+		}
+
+		fmt.Printf("\nProcessed Results:\n")
+
+		// Process mapper directives first
+		fmt.Printf("\nMapper Directives:\n")
+		mapperDefinitions := []model.MapperDefinition{}
+
+		for i, directive := range mapperDirectives {
+			result, err := registry.Process(directive)
+			if err != nil {
+				fmt.Printf("  Error processing mapper directive %d: %v\n", i+1, err)
+				continue
+			}
+
+			if mapperDef, ok := result.(model.MapperDefinition); ok {
+				fmt.Printf("  Mapper %d:\n", i+1)
+				fmt.Printf("    ImplName: %s\n", mapperDef.ImplName)
+				fmt.Printf("    Package: %s\n", mapperDef.Package)
+				fmt.Printf("    TargetFile: %s\n", mapperDef.TargetFile)
+				fmt.Printf("    Methods:\n")
+				for j, method := range mapperDef.Methods {
+					fmt.Printf("      Method %d:\n", j+1)
+					fmt.Printf("        Name: %s\n", method.Name)
+					fmt.Printf("        SourceType: %s\n", method.SourceType)
+					fmt.Printf("        TargetType: %s\n", method.TargetType)
+				}
+
+				// Store the mapper definition
+				mapperDefinitions = append(mapperDefinitions, mapperDef)
+			}
+		}
+
+		// Process mapping directives
+		fmt.Printf("\nMapping Directives:\n")
+		for i, directive := range mappingDirectives {
+			result, err := registry.Process(directive)
+			if err != nil {
+				fmt.Printf("  Error processing mapping directive %d: %v\n", i+1, err)
+				continue
+			}
+
+			if mappingDef, ok := result.(model.MappingDefinition); ok {
+				fmt.Printf("  Mapping %d:\n", i+1)
+				fmt.Printf("    From: %s\n", mappingDef.From)
+				fmt.Printf("    To: %s\n", mappingDef.To)
+				fmt.Printf("    Using: %s\n", mappingDef.Using)
+				fmt.Printf("    Ignore: %v\n", mappingDef.Ignore)
+
+				// For now, we'll associate the mapping with the first method of the first mapper definition
+				// In a real implementation, we would need to find the correct method based on the AST
+				if len(mapperDefinitions) > 0 && len(mapperDefinitions[0].Methods) > 0 {
+					// Add the mapping to the first method of the first mapper definition
+					mapperDefinitions[0].Methods[0].Mappings = append(mapperDefinitions[0].Methods[0].Mappings, mappingDef)
+				}
+			}
+		}
+
+		// Process validator directives
+		fmt.Printf("\nValidator Directives:\n")
+		for i, directive := range validatorDirectives {
+			result, err := registry.Process(directive)
+			if err != nil {
+				fmt.Printf("  Error processing validator directive %d: %v\n", i+1, err)
+				continue
+			}
+
+			if validatorDef, ok := result.(model.ValidatorDefinition); ok {
+				fmt.Printf("  Validator %d:\n", i+1)
+				fmt.Printf("    ImplName: %s\n", validatorDef.ImplName)
+				fmt.Printf("    Package: %s\n", validatorDef.Package)
+				fmt.Printf("    Fields: %v\n", validatorDef.Fields)
+			}
+		}
+
+		// Generate code for mapper definitions
+		for _, mapperDef := range mapperDefinitions {
+			g := generator.NewGenerator(path)
+			err := g.Generate(mapperDef)
+			if err != nil {
+				fmt.Printf("  Error generating code: %v\n", err)
+			}
 		}
 	}
 }

@@ -49,6 +49,8 @@ func (p *Preprocessor) Process(file *ast.File) []model.Directive {
 				node := p.findAssociatedNode(file, comment)
 				if node != nil {
 					directive.Node = node
+					// Add the package name to the directive's metadata
+					directive.Metadata["package"] = file.Name.Name
 					directives = append(directives, directive)
 				}
 			}
@@ -71,8 +73,9 @@ func (p *Preprocessor) findDirectivesInComment(commentText string) []model.Direc
 	var directives []model.Directive
 
 	// Regular expression to match directives like "+mapgen:<type>"
-	// It also captures any additional metadata in the form of key=value pairs
-	directiveRegex := regexp.MustCompile(`\+mapgen:(\w+)(?:\s+(\w+=\w+))*`)
+	directiveRegex := regexp.MustCompile(`\+mapgen:(\w+)`)
+	metadataRegex := regexp.MustCompile(`(\w+):([\w\.]+)`)
+	
 	matches := directiveRegex.FindAllStringSubmatch(commentText, -1)
 
 	for _, match := range matches {
@@ -80,15 +83,29 @@ func (p *Preprocessor) findDirectivesInComment(commentText string) []model.Direc
 			continue
 		}
 
-		// Create a new directive with type "mapper" as specified in the issue description
+		// Create a new directive with the type from the regex match
 		directive := model.Directive{
-			Type:     "mapper",
+			Type:     match[1],
 			Metadata: make(map[string]string),
 		}
 
-		// Extract metadata from the directive
-		// The issue description specifies metadata as {impl: "user_mapper"}
-		directive.Metadata["impl"] = "user_mapper"
+		// Extract metadata from the directive using a separate regex
+		metadataMatches := metadataRegex.FindAllStringSubmatch(commentText, -1)
+		for _, metadataMatch := range metadataMatches {
+			if len(metadataMatch) < 3 {
+				continue
+			}
+			
+			key := metadataMatch[1]
+			value := metadataMatch[2]
+			
+			// Skip the directive type itself
+			if key == "mapgen" {
+				continue
+			}
+			
+			directive.Metadata[key] = value
+		}
 
 		// Add the directive to the list
 		directives = append(directives, directive)
