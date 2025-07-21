@@ -1,6 +1,7 @@
 package testdata
 
 import (
+	"github.com/nduyhai/mapgen/test/bootiful"
 	"github.com/nduyhai/mapgen/test/fancy"
 	"time"
 )
@@ -14,15 +15,6 @@ type User struct {
 	CreatedAt time.Time
 }
 
-type UserDTO struct {
-	ID        int
-	Name      string
-	FirstName string
-	LastName  string
-	Email     string
-	CreatedAt int64
-}
-
 func TimeToUnix(src time.Time) int64 {
 	return src.Unix()
 }
@@ -32,7 +24,7 @@ type UserMapper interface {
 	// +mapgen:mapping from:UserName to:Name
 	// +mapgen:mapping from:CreatedAt to:CreatedAt using:TimeToUnix
 	// +mapgen:mapping ignore:PasswordHash
-	ToDTO(*User) *UserDTO
+	ToDTO(*User) *bootiful.UserDTO
 }
 
 // +mapgen:mapper impl:addressDtoMapper target:address_dto_mapper.go
