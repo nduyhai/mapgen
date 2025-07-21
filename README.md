@@ -10,8 +10,15 @@ A GitHub template repository for bootstrapping a new Go project with a clean, id
 
 ## Getting Started
 
+###
 ```shell
-// +mapgen:mapper impl:userMapper target:user_mapper.go
+go run cmd/mapgen/*.go
+```
+
+### 
+```go
+
+// +mapgen:mapper impl:userMapper
 type UserMapper interface {
 	
     // +mapgen:mapping from:UserName to:Name
@@ -19,5 +26,5 @@ type UserMapper interface {
     // +mapgen:mapping ignore:PasswordHash
     ToDTO(*proto.User) *dto.UserDTO
 }
-```
 
+```
