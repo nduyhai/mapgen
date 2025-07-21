@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/nduyhai/mapgen/internal/preprocessor"
 	"github.com/nduyhai/mapgen/internal/scanner"
 )
 
@@ -58,5 +59,19 @@ func main() {
 		fmt.Printf("- Number of types: %d\n", len(typeInfo.Types))
 		fmt.Printf("- Number of definitions: %d\n", len(typeInfo.Defs))
 		fmt.Printf("- Number of uses: %d\n", len(typeInfo.Uses))
+
+		// Create a preprocessor and process the file
+		p := preprocessor.NewPreprocessor()
+		directives := p.Process(file)
+
+		// Print information about the directives found
+		fmt.Printf("\nDirectives:\n")
+		fmt.Printf("- Number of directives: %d\n", len(directives))
+		for i, directive := range directives {
+			fmt.Printf("  Directive %d:\n", i+1)
+			fmt.Printf("  - Type: %s\n", directive.Type)
+			fmt.Printf("  - Metadata: %v\n", directive.Metadata)
+			fmt.Printf("  - Node Type: %T\n", directive.Node)
+		}
 	}
 }
