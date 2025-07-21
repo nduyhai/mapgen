@@ -9,19 +9,122 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+// ModuleImporter is a custom importer that can resolve packages in the local module
+type ModuleImporter struct {
+	moduleRoot  string
+	stdImporter types.Importer
+}
+
+// Import implements the types.Importer interface
+func (mi *ModuleImporter) Import(path string) (*types.Package, error) {
+	// First try the standard importer for standard library packages
+	pkg, err := mi.stdImporter.Import(path)
+	if err == nil {
+		return pkg, nil
+	}
+
+	// Check if the import path starts with the module name from go.mod
+	if strings.HasPrefix(path, "github.com/nduyhai/mapgen/") {
+		// Extract the relative path within the module
+		relPath := strings.TrimPrefix(path, "github.com/nduyhai/mapgen/")
+
+		// Construct the local filesystem path
+		localPath := filepath.Join(mi.moduleRoot, relPath)
+
+		// Parse the package
+		fset := token.NewFileSet()
+		pkgs, err := parser.ParseDir(fset, localPath, nil, parser.ParseComments)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse package %s: %w", path, err)
+		}
+
+		if len(pkgs) == 0 {
+			return nil, fmt.Errorf("no packages found at %s", localPath)
+		}
+
+		// Use the first package found
+		var astPkg *ast.Package
+		for _, pkg := range pkgs {
+			astPkg = pkg
+			break
+		}
+
+		// Create a new types.Package
+		typesPkg := types.NewPackage(path, astPkg.Name)
+
+		// Convert package.Files map to a slice of *ast.File
+		var files []*ast.File
+		for _, file := range astPkg.Files {
+			files = append(files, file)
+		}
+
+		// Type check the package
+		typeConfig := &types.Config{
+			Importer: mi,                 // Use this importer for recursive imports
+			Error:    func(err error) {}, // Silently collect errors
+		}
+
+		typeInfo := &types.Info{}
+		err = types.NewChecker(typeConfig, fset, typesPkg, typeInfo).Files(files)
+		if err != nil {
+			return nil, fmt.Errorf("type checking error for package %s: %w", path, err)
+		}
+
+		return typesPkg, nil
+	}
+
+	// Fall back to the standard importer for other packages
+	return mi.stdImporter.Import(path)
+}
 
 // Scanner is responsible for parsing Go source files into ASTs and performing type checking.
 type Scanner struct {
 	// FileSet provides position information for AST nodes
 	fset *token.FileSet
+	// Module root directory
+	moduleRoot string
 }
 
 // NewScanner creates a new Scanner instance.
-// It initializes the token.FileSet for position information.
+// It initializes the token.FileSet for position information and determines the module root.
 func NewScanner() *Scanner {
+	// Get the current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Printf("Warning: could not determine current directory: %v\n", err)
+		cwd = "."
+	}
+
+	// Find the module root (directory containing go.mod)
+	moduleRoot := findModuleRoot(cwd)
+
 	return &Scanner{
-		fset: token.NewFileSet(),
+		fset:       token.NewFileSet(),
+		moduleRoot: moduleRoot,
+	}
+}
+
+// findModuleRoot finds the directory containing the go.mod file
+// by traversing up the directory tree from the given path.
+func findModuleRoot(dir string) string {
+	for {
+		// Check if go.mod exists in the current directory
+		goModPath := filepath.Join(dir, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			return dir
+		}
+
+		// Move up one directory
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// We've reached the root directory without finding go.mod
+			fmt.Println("Warning: could not find go.mod file, module-relative imports may not work")
+			return ""
+		}
+		dir = parent
 	}
 }
 
@@ -76,9 +179,15 @@ func (s *Scanner) ParseDir(dirPath string) ([]*types.Package, error) {
 			Scopes:     make(map[ast.Node]*types.Scope),
 		}
 
-		// Create type config with the default importer
+		// Create a custom module-aware importer
+		customImporter := &ModuleImporter{
+			moduleRoot:  s.moduleRoot,
+			stdImporter: importer.Default(),
+		}
+
+		// Create type config with the custom importer
 		typeConfig := &types.Config{
-			Importer: importer.Default(),
+			Importer: customImporter,
 			Error:    func(err error) {}, // Silently collect errors
 		}
 
@@ -133,9 +242,15 @@ func (s *Scanner) TypeCheckFile(filePath string) (*ast.File, *types.Info, error)
 		Scopes:     make(map[ast.Node]*types.Scope),
 	}
 
-	// Create type config with the default importer
+	// Create a custom module-aware importer
+	customImporter := &ModuleImporter{
+		moduleRoot:  s.moduleRoot,
+		stdImporter: importer.Default(),
+	}
+
+	// Create type config with the custom importer
 	typeConfig := &types.Config{
-		Importer: importer.Default(),
+		Importer: customImporter,
 		Error:    func(err error) {}, // Silently collect errors
 	}
 
