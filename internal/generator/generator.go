@@ -11,6 +11,17 @@ import (
 	"github.com/nduyhai/mapgen/internal/model"
 )
 
+// Generate is a convenience function that creates a DefaultGenerator and uses it to generate code.
+// This function is used by the main package.
+func Generate(def interface{}, outputDir string) error {
+	// Create a new generator with a default source file
+	// Since we don't have the source file information here, we'll use a placeholder
+	// The actual source file will be determined by the generator based on the definition
+	g := NewGenerator("")
+
+	return g.Generate(def)
+}
+
 // Generator is responsible for generating code based on definitions.
 type Generator interface {
 	// Generate generates code based on a definition.

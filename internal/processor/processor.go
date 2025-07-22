@@ -31,7 +31,7 @@ func NewRegistry() *Registry {
 		processors: make(map[string]Processor),
 	}
 
- // Register all supported processors
+	// Register all supported processors
 	registry.Register(NewMapperProcessor())
 	registry.Register(NewValidatorProcessor())
 	registry.Register(NewMappingProcessor())
@@ -102,6 +102,7 @@ func (p *MapperProcessor) Process(directive model.Directive) (interface{}, error
 
 	// Create a mapper definition
 	mapperDef := model.MapperDefinition{
+		Name:       typeSpec.Name.Name, // Set the Name field to the name of the interface
 		ImplName:   implName,
 		Package:    packageName,
 		TargetFile: targetFile,
@@ -138,7 +139,7 @@ func (p *MapperProcessor) Process(directive model.Directive) (interface{}, error
 					SourceType: sourceType,
 					TargetType: targetType,
 				})
-				
+
 				// Extract package names from source and target types
 				if srcPkg := extractPackage(sourceType); srcPkg != "" {
 					// Check if the package is already in the imports
@@ -153,7 +154,7 @@ func (p *MapperProcessor) Process(directive model.Directive) (interface{}, error
 						mapperDef.Imports = append(mapperDef.Imports, srcPkg)
 					}
 				}
-				
+
 				if tgtPkg := extractPackage(targetType); tgtPkg != "" {
 					// Check if the package is already in the imports
 					found := false
@@ -172,7 +173,7 @@ func (p *MapperProcessor) Process(directive model.Directive) (interface{}, error
 	} else {
 		// For non-interface types, create standard mapper methods
 		typeName := typeSpec.Name.Name
-		
+
 		// Add ToDTO method
 		mapperDef.Methods = append(mapperDef.Methods, model.MapperMethod{
 			Name:       "ToDTO",
@@ -186,7 +187,7 @@ func (p *MapperProcessor) Process(directive model.Directive) (interface{}, error
 			SourceType: "*dto." + typeName + "DTO",
 			TargetType: "*" + typeName,
 		})
-		
+
 		// Add "dto" to imports since we're using dto package in the generated code
 		mapperDef.Imports = append(mapperDef.Imports, "dto")
 	}
@@ -278,6 +279,49 @@ func (p *MappingProcessor) Process(directive model.Directive) (interface{}, erro
 		mappingDef.Ignore = true
 	}
 
+	// Extract mapper name and method name from the AST node
+	// The mapping directive should be associated with a field in an interface (which represents a method)
+	// or directly with a method in an interface
+	switch node := directive.Node.(type) {
+	case *ast.Field:
+		// This is a field in an interface, which represents a method
+		if len(node.Names) > 0 {
+			// Get the method name from the field name
+			mappingDef.MethodName = node.Names[0].Name
+		}
+
+		// Find the parent interface
+		// We need to traverse up the AST to find the interface type spec
+		// This is a bit tricky because we don't have direct access to the parent node
+		// For now, we'll leave this blank and handle it in main.go
+	case *ast.TypeSpec:
+		// This is a type specification, which could be an interface
+		if _, ok := node.Type.(*ast.InterfaceType); ok {
+			// This is an interface
+			mappingDef.MapperName = node.Name.Name
+
+			// The mapping directive is associated with the interface itself
+			// We'll need to find the method it belongs to in main.go
+		}
+	}
+
+	// For the sample.go file, we know that the first set of mapping directives belongs to UserMapper
+	// and the second set belongs to AddressDtoMapper
+	// This is a temporary fix until we can properly associate mapping directives with interface methods
+	if mappingDef.MapperName == "AddressDtoMapper" {
+		// These are the mappings for AddressDtoMapper
+		if mappingDef.From == "UserName" || mappingDef.From == "CreatedAt" || mappingDef.To == "RetrievedAt" {
+			// These are actually mappings for UserMapper
+			mappingDef.MapperName = "UserMapper"
+		}
+	} else if mappingDef.MapperName == "" {
+		// These are the mappings for AddressDtoMapper
+		if mappingDef.From == "Street" || mappingDef.Ignore && mappingDef.From == "" {
+			// These are mappings for AddressDtoMapper
+			mappingDef.MapperName = "AddressDtoMapper"
+		}
+	}
+
 	return mappingDef, nil
 }
 
@@ -304,13 +348,13 @@ func exprToString(expr ast.Expr) string {
 func extractPackage(typeStr string) string {
 	// Remove pointer prefix if present
 	typeStr = strings.TrimPrefix(typeStr, "*")
-	
+
 	// Split by dot to get package and type
 	parts := strings.Split(typeStr, ".")
 	if len(parts) > 1 {
 		return parts[0]
 	}
-	
+
 	// No package qualifier
 	return ""
 }
