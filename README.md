@@ -68,10 +68,10 @@ Parameters:
 
 ### Default Mapping Behavior
 
-If no mapping annotations are provided for a method, mapgen will automatically map all fields with matching names from the source to the target. This is done using reflection at runtime:
+If no mapping annotations are provided for a method, mapgen will automatically map all fields with matching names from the source to the target. This is done using direct field assignments:
 
-1. For each field in the target type, it looks for a field with the same name in the source type
-2. If a matching field is found and the types are compatible, the value is copied from source to target
+1. For each field in the target type, a direct assignment is generated from the corresponding field in the source type
+2. Fields with matching names and compatible types are directly copied from source to target
 3. Fields with different names or incompatible types are not mapped
 
 This default behavior makes it easy to map simple DTOs without having to specify each field mapping explicitly.

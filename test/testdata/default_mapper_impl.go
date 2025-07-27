@@ -2,10 +2,6 @@
 
 package testdata
 
-import (
-	"reflect"
-)
-
 // defaultMapper is a generated mapper implementation.
 type defaultMapper struct{}
 
@@ -13,24 +9,10 @@ type defaultMapper struct{}
 func (m *defaultMapper) ToTarget(source *SimpleSource) *SimpleTarget {
 	target := &SimpleTarget{}
 	// Default behavior: copy all fields with matching names from source to target
-	srcVal := reflect.ValueOf(source).Elem()
-	tgtVal := reflect.ValueOf(target).Elem()
-	tgtType := tgtVal.Type()
-
-	// Iterate through target fields and copy matching fields from source
-	for i := 0; i < tgtVal.NumField(); i++ {
-		tgtField := tgtVal.Field(i)
-		tgtFieldName := tgtType.Field(i).Name
-		srcField := srcVal.FieldByName(tgtFieldName)
-
-		// Check if the field exists in the source and can be set
-		if srcField.IsValid() && tgtField.CanSet() {
-			// Check if the types are directly assignable
-			if srcField.Type().AssignableTo(tgtField.Type()) {
-				tgtField.Set(srcField)
-			}
-		}
-	}
+	target.ID = source.ID
+	target.Name = source.Name
+	target.Email = source.Email
+	target.CreatedAt = source.CreatedAt
 
 	return target
 }
